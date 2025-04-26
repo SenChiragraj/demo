@@ -3,10 +3,10 @@ import { exec } from 'child_process';
 import dotenv from 'dotenv';
 
 dotenv.config();
-const SERVER_URL = process.env.SERVER_URL || 'http://localhost:5000';
+const SERVER_URL = process.env.SERVER_URL || 'http://localhost:4000';
 const HEALTH_ENDPOINT = '/health';
 const SERVER_START_CMD = 'npm start';
-const SERVER_TIMEOUT = 5000; // 5 seconds timeout for operations
+const SERVER_TIMEOUT = 4000; // 5 seconds timeout for operations
 
 let serverProcess;
 

@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 // Initialize Express app
 const app = express();
 dotenv.config();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4000;
 
 // Middleware
 app.use(cors());
@@ -65,14 +65,6 @@ app.use((err, req, res, next) => {
 const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully...');
-  server.close(() => {
-    console.log('Server terminated');
-  });
 });
 
 export default server; // For testing purposes
