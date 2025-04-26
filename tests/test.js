@@ -8,7 +8,7 @@ const SERVER_URL = 'http://localhost:4000';
 const HEALTH_ENDPOINT = '/health';
 const SERVER_START_CMD = 'npm start';
 const SERVER_TIMEOUT = 4000; // 4 seconds
-const MAX_RETRIES = 3;
+const MAX_ATTEMPTS = 3;
 
 let serverProcess = null;
 
@@ -24,6 +24,17 @@ async function isServerRunning() {
   }
 }
 
+async function waitForServer(timeoutMs = SERVER_TIMEOUT) {
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeoutMs) {
+    if (await isServerRunning()) {
+      return true;
+    }
+    await new Promise((r) => setTimeout(r, 300)); // Wait 300ms before retrying
+  }
+  throw new Error('Server did not become healthy in time');
+}
+
 async function startServer() {
   return new Promise((resolve, reject) => {
     serverProcess = exec(SERVER_START_CMD, {
@@ -31,21 +42,18 @@ async function startServer() {
     });
 
     let serverStarted = false;
-
-    const checkStartup = async () => {
-      if (!serverStarted && (await isServerRunning())) {
-        serverStarted = true;
-        resolve();
+    const startupTimeout = setTimeout(() => {
+      if (!serverStarted) {
+        reject(new Error('Server startup timed out'));
       }
-    };
+    }, SERVER_TIMEOUT);
 
     serverProcess.stdout.on('data', (data) => {
       console.log(`Server: ${data}`);
-      if (data.includes('Server running')) {
-        const interval = setInterval(async () => {
-          await checkStartup();
-          if (serverStarted) clearInterval(interval);
-        }, 200);
+      if (data.includes('Server running') && !serverStarted) {
+        clearTimeout(startupTimeout); // 🛑 Clear timeout on success
+        serverStarted = true;
+        resolve();
       }
     });
 
@@ -53,17 +61,16 @@ async function startServer() {
       console.error(`Server Error: ${data}`);
     });
 
-    serverProcess.on('error', (err) => reject(err));
-
-    setTimeout(() => {
-      if (!serverStarted) reject(new Error('Server startup timed out'));
-    }, SERVER_TIMEOUT);
+    serverProcess.on('error', (err) => {
+      clearTimeout(startupTimeout); // 🛑 Clear timeout on error
+      reject(err);
+    });
   });
 }
 
 async function stopServer() {
   if (!serverProcess) return;
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     serverProcess.once('exit', resolve);
     serverProcess.kill('SIGTERM');
     setTimeout(() => {
@@ -75,40 +82,39 @@ async function stopServer() {
 }
 
 async function runTests() {
-  let attempts = 0;
+  let attempt = 0;
   let serverStarted = false;
 
-  while (attempts < MAX_RETRIES) {
-    attempts++;
-    try {
-      console.log(`Attempt ${attempts}: Starting server...`);
-      await startServer();
+  while (attempt < MAX_ATTEMPTS && !serverStarted) {
+    attempt++;
+    console.log(`\nAttempt ${attempt}: Starting server...`);
 
-      if (await isServerRunning()) {
-        console.log('✅ Server is up and running');
-        serverStarted = true;
-        break;
-      }
+    try {
+      await startServer();
+      console.log('⏳ Waiting for server to be up...');
+      await waitForServer(); // 💬 Now this function exists
+      serverStarted = true;
+      console.log('✅ Server started successfully!');
     } catch (error) {
-      console.error(`Attempt ${attempts} failed: ${error.message}`);
-      await stopServer(); // Cleanup if it failed
+      console.error(`Attempt ${attempt} failed: ${error.message}`);
+      await stopServer();
     }
   }
 
   if (!serverStarted) {
-    console.error('❌ Failed to start server after maximum retries');
+    console.error('❌ Server failed to start after multiple attempts.');
     process.exit(1);
   }
 
   try {
-    console.log('🏃 Running test cases...');
+    console.log('🏃 Running tests...');
     const response = await axios.get(`${SERVER_URL}${HEALTH_ENDPOINT}`);
     console.log(
-      `Server: ${response.config.method.toUpperCase()} ${
+      `Server responded: ${response.config.method.toUpperCase()} ${
         response.config.url
       } => ${response.status}`
     );
-    console.log('✅ All tests passed!');
+    console.log('✅ Tests completed successfully!');
   } catch (error) {
     console.error('❌ Test failed:', error.message);
     process.exitCode = 1;
