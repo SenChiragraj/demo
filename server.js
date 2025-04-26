@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 // Initialize Express app
 const app = express();
 dotenv.config();
-const PORT = process.env.PORT || 4000;
+// const PORT = process.env.PORT || 4000;
 
 // Middleware
 app.use(cors());
@@ -62,9 +62,9 @@ app.use((err, req, res, next) => {
 // ======================
 // SERVER STARTUP
 // ======================
-const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
+const server = app.listen(4000, () => {
+  console.log(`Server running on port 4000`);
+  console.log(`Health check: http://localhost:4000/health`);
 });
 
 export default server; // For testing purposes
