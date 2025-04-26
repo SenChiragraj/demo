@@ -1,129 +1,105 @@
 import axios from 'axios';
 import { exec } from 'child_process';
-import dotenv from 'dotenv';
+import { config } from 'dotenv';
 
-dotenv.config();
+// Load environment variables
+config();
 
-const SERVER_URL = 'http://localhost:4000';
+const SERVER_URL = process.env.SERVER_URL || 'http://localhost:4000';
 const HEALTH_ENDPOINT = '/health';
-const SERVER_START_CMD = 'npm start';
-const SERVER_TIMEOUT = 4000; // 4 seconds
-const MAX_ATTEMPTS = 3;
+const SERVER_START_CMD = process.env.SERVER_START_CMD || 'node server.js';
 
-let serverProcess = null;
+let serverProcess;
 
-async function isServerRunning() {
-  try {
-    const response = await axios.get(`${SERVER_URL}${HEALTH_ENDPOINT}`, {
-      timeout: 1000,
-      validateStatus: () => true,
+/**
+ * Start the server
+ */
+function startServer() {
+  return new Promise((resolve) => {
+    serverProcess = exec(SERVER_START_CMD);
+
+    // Wait for server to start
+    serverProcess.stdout.on('data', (data) => {
+      console.log(`Server: ${data}`);
+      if (data.includes('Server running')) {
+        setTimeout(resolve, 500);
+      }
     });
-    return response.status === 200;
-  } catch {
+
+    // Ensure errors don't hang the process
+    serverProcess.on('error', (err) => {
+      console.error('Server process error:', err);
+      process.exit(1);
+    });
+  });
+}
+
+/**
+ * Stop the server forcefully
+ */
+function stopServer() {
+  if (serverProcess) {
+    console.log('Terminating server process...');
+    serverProcess.kill('SIGKILL'); // Forceful termination
+    serverProcess = null;
+  }
+}
+
+/**
+ * Test the health endpoint
+ */
+async function testHealthEndpoint() {
+  try {
+    const response = await axios.get(`${SERVER_URL}${HEALTH_ENDPOINT}`);
+    console.log('✅ Health endpoint response:', {
+      status: response.status,
+      data: response.data,
+    });
+    return true;
+  } catch (error) {
+    console.error('❌ Health check failed:', error.message);
     return false;
   }
 }
 
-async function waitForServer(timeoutMs = SERVER_TIMEOUT) {
-  const startTime = Date.now();
-  while (Date.now() - startTime < timeoutMs) {
-    if (await isServerRunning()) {
-      return true;
-    }
-    await new Promise((r) => setTimeout(r, 300)); // Wait 300ms before retrying
-  }
-  throw new Error('Server did not become healthy in time');
-}
-
-async function startServer() {
-  return new Promise((resolve, reject) => {
-    serverProcess = exec(SERVER_START_CMD, {
-      killSignal: 'SIGKILL',
-    });
-
-    let serverStarted = false;
-    const startupTimeout = setTimeout(() => {
-      if (!serverStarted) {
-        reject(new Error('Server startup timed out'));
-      }
-    }, SERVER_TIMEOUT);
-
-    serverProcess.stdout.on('data', (data) => {
-      console.log(`Server: ${data}`);
-      if (data.includes('Server running') && !serverStarted) {
-        clearTimeout(startupTimeout); // 🛑 Clear timeout on success
-        serverStarted = true;
-        resolve();
-      }
-    });
-
-    serverProcess.stderr.on('data', (data) => {
-      console.error(`Server Error: ${data}`);
-    });
-
-    serverProcess.on('error', (err) => {
-      clearTimeout(startupTimeout); // 🛑 Clear timeout on error
-      reject(err);
-    });
-  });
-}
-
-async function stopServer() {
-  if (!serverProcess) return;
-  return new Promise((resolve) => {
-    serverProcess.once('exit', resolve);
-    serverProcess.kill('SIGTERM');
-    setTimeout(() => {
-      if (serverProcess) {
-        serverProcess.kill('SIGKILL');
-      }
-    }, 2000);
-  });
-}
-
+/**
+ * Run all tests
+ */
 async function runTests() {
-  let attempt = 0;
-  let serverStarted = false;
-
-  while (attempt < MAX_ATTEMPTS && !serverStarted) {
-    attempt++;
-    console.log(`\nAttempt ${attempt}: Starting server...`);
-
-    try {
-      await startServer();
-      console.log('⏳ Waiting for server to be up...');
-      await waitForServer(); // 💬 Now this function exists
-      serverStarted = true;
-      console.log('✅ Server started successfully!');
-    } catch (error) {
-      console.error(`Attempt ${attempt} failed: ${error.message}`);
-      await stopServer();
-    }
-  }
-
-  if (!serverStarted) {
-    console.error('❌ Server failed to start after multiple attempts.');
-    process.exit(1);
-  }
-
   try {
-    console.log('🏃 Running tests...');
-    const response = await axios.get(`${SERVER_URL}${HEALTH_ENDPOINT}`);
-    console.log(
-      `Server responded: ${response.config.method.toUpperCase()} ${
-        response.config.url
-      } => ${response.status}`
-    );
-    console.log('✅ Tests completed successfully!');
+    console.log('Starting server...');
+    await startServer();
+
+    console.log('Testing health endpoint...');
+    const healthOk = await testHealthEndpoint();
+
+    if (!healthOk) {
+      throw new Error('Health check failed');
+    }
+
+    console.log('🚀 All tests passed!');
   } catch (error) {
     console.error('❌ Test failed:', error.message);
     process.exitCode = 1;
   } finally {
-    console.log('🛑 Shutting down server...');
-    await stopServer();
-    console.log('✅ Server shutdown complete');
-    process.exit();
+    stopServer();
+    process.exit(); // Explicitly exit the process
   }
 }
 
+// Run the tests
 runTests();
+
+// Handle any uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  stopServer();
+  process.exit(1);
+});
+
+// Handle promise rejections
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
+  stopServer();
+  process.exit(1);
+});
