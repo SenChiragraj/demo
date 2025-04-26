@@ -127,6 +127,7 @@ async function runTests() {
     );
 
     console.log('✅ All tests passed!');
+    process.exitCode = 0;
   } catch (error) {
     console.error('❌ Test failed:', error.message);
     process.exitCode = 1;
@@ -134,6 +135,7 @@ async function runTests() {
     try {
       await stopServer();
       console.log('Test process completed');
+      process.exitCode = 0;
     } catch (error) {
       console.error('❌ Failed to stop server:', error.message);
       process.exitCode = 1;
