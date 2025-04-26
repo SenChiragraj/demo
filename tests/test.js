@@ -1,9 +1,9 @@
 import axios from 'axios';
 import { exec } from 'child_process';
-import { config } from 'dotenv';
+import dotenv from 'dotenv';
 
-config();
-const SERVER_URL = 'http://localhost:4000';
+dotenv.configconfig();
+const SERVER_URL = process.env.SERVER_URL || 'http://localhost:4000';
 const HEALTH_ENDPOINT = '/health';
 const SERVER_START_CMD = 'npm start';
 const SERVER_TIMEOUT = 5000; // 5 seconds timeout for operations
