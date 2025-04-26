@@ -2,7 +2,7 @@ import axios from 'axios';
 import { exec } from 'child_process';
 import dotenv from 'dotenv';
 
-dotenv.configconfig();
+dotenv.config();
 const SERVER_URL = process.env.SERVER_URL || 'http://localhost:4000';
 const HEALTH_ENDPOINT = '/health';
 const SERVER_START_CMD = 'npm start';
