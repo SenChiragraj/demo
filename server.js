@@ -2,6 +2,7 @@ import express, { json, urlencoded } from 'express';
 import morgan from 'morgan';
 import cors from 'cors';
 import dotenv from 'dotenv';
+
 // Initialize Express app
 const app = express();
 dotenv.config();
@@ -47,39 +48,6 @@ app.post('/webhook', (req, res) => {
   res.status(200).json({ received: true });
 });
 
-// ======================
-// ERROR HANDLING
-// ======================
-app.use((req, res, next) => {
-  res.status(404).json({ error: 'Route not found' });
+app.listen(process.env.PORT || 4000, () => {
+  console.log('Server running on port : 4000');
 });
-
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
-const server = app.listen(4000, () => {
-  console.log(`Server: Port 4000 bound`);
-});
-
-server.on('listening', () => {
-  console.log('SERVER_READY');
-  console.log(`Health check: http://localhost:4000/health`);
-});
-
-server.on('error', (err) => {
-  console.error('Server error:', err);
-});
-
-// Handle shutdown signals
-['SIGINT', 'SIGTERM'].forEach((signal) => {
-  process.on(signal, () => {
-    server.close(() => {
-      console.log(`Server stopped by ${signal}`);
-      process.exit(0);
-    });
-  });
-});
-
-export default server; // For testing purposes

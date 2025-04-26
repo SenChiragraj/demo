@@ -3,13 +3,14 @@ import { exec } from 'child_process';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
 const SERVER_URL = 'http://localhost:4000';
 const HEALTH_ENDPOINT = '/health';
 const SERVER_START_CMD = 'npm start';
-const SERVER_TIMEOUT = 15000; // 15 seconds
-const HEALTH_CHECK_TIMEOUT = 10000; // 10 seconds
+const SERVER_TIMEOUT = 4000; // 4 seconds
+const MAX_RETRIES = 3;
 
-let serverProcess;
+let serverProcess = null;
 
 async function isServerRunning() {
   try {
@@ -27,21 +28,10 @@ async function startServer() {
   return new Promise((resolve, reject) => {
     serverProcess = exec(SERVER_START_CMD, {
       killSignal: 'SIGKILL',
-      timeout: SERVER_TIMEOUT,
     });
 
-    // Handle process errors
-    serverProcess.on('error', reject);
-
-    // Handle early exit
-    serverProcess.on('exit', (code) => {
-      if (code !== 0) {
-        reject(new Error(`Server exited with code ${code}`));
-      }
-    });
-
-    // Buffer to collect output for verification
     let serverStarted = false;
+
     const checkStartup = async () => {
       if (!serverStarted && (await isServerRunning())) {
         serverStarted = true;
@@ -52,10 +42,10 @@ async function startServer() {
     serverProcess.stdout.on('data', (data) => {
       console.log(`Server: ${data}`);
       if (data.includes('Server running')) {
-        // Start checking health endpoint
-        const interval = setInterval(checkStartup, 100);
-        // Stop checking once resolved
-        serverProcess.once('exit', () => clearInterval(interval));
+        const interval = setInterval(async () => {
+          await checkStartup();
+          if (serverStarted) clearInterval(interval);
+        }, 200);
       }
     });
 
@@ -63,47 +53,18 @@ async function startServer() {
       console.error(`Server Error: ${data}`);
     });
 
-    // Timeout if server doesn't start
+    serverProcess.on('error', (err) => reject(err));
+
     setTimeout(() => {
-      if (!serverStarted) {
-        reject(new Error('Server startup timed out'));
-      }
+      if (!serverStarted) reject(new Error('Server startup timed out'));
     }, SERVER_TIMEOUT);
   });
 }
 
 async function stopServer() {
   if (!serverProcess) return;
-
   return new Promise((resolve, reject) => {
-    // Set cleanup handlers first
-    const cleanup = () => {
-      clearInterval(checkInterval);
-      clearTimeout(failTimeout);
-      serverProcess = null;
-    };
-
-    // Force kill after timeout
-    const failTimeout = setTimeout(() => {
-      cleanup();
-      reject(new Error('Failed to stop server within timeout'));
-    }, SERVER_TIMEOUT);
-
-    // Confirm server is down
-    const checkInterval = setInterval(async () => {
-      if (!(await isServerRunning())) {
-        cleanup();
-        resolve();
-      }
-    }, 100);
-
-    // Send kill signals
-    serverProcess.once('exit', () => {
-      cleanup();
-      resolve();
-    });
-
-    // Try SIGTERM first, then SIGKILL after delay
+    serverProcess.once('exit', resolve);
     serverProcess.kill('SIGTERM');
     setTimeout(() => {
       if (serverProcess) {
@@ -114,33 +75,48 @@ async function stopServer() {
 }
 
 async function runTests() {
-  try {
-    await startServer();
+  let attempts = 0;
+  let serverStarted = false;
 
-    if (!(await isServerRunning())) {
-      throw new Error('Server not responding after startup');
+  while (attempts < MAX_RETRIES) {
+    attempts++;
+    try {
+      console.log(`Attempt ${attempts}: Starting server...`);
+      await startServer();
+
+      if (await isServerRunning()) {
+        console.log('✅ Server is up and running');
+        serverStarted = true;
+        break;
+      }
+    } catch (error) {
+      console.error(`Attempt ${attempts} failed: ${error.message}`);
+      await stopServer(); // Cleanup if it failed
     }
+  }
 
-    console.log('Running test cases...');
+  if (!serverStarted) {
+    console.error('❌ Failed to start server after maximum retries');
+    process.exit(1);
+  }
+
+  try {
+    console.log('🏃 Running test cases...');
     const response = await axios.get(`${SERVER_URL}${HEALTH_ENDPOINT}`);
     console.log(
-      `Server: ${response.config.method} ${response.config.url} ${response.status}`
+      `Server: ${response.config.method.toUpperCase()} ${
+        response.config.url
+      } => ${response.status}`
     );
-
     console.log('✅ All tests passed!');
-    process.exitCode = 0;
   } catch (error) {
     console.error('❌ Test failed:', error.message);
     process.exitCode = 1;
   } finally {
-    try {
-      await stopServer();
-      console.log('Test process completed');
-      process.exitCode = 0;
-    } catch (error) {
-      console.error('❌ Failed to stop server:', error.message);
-      process.exitCode = 1;
-    }
+    console.log('🛑 Shutting down server...');
+    await stopServer();
+    console.log('✅ Server shutdown complete');
+    process.exit();
   }
 }
 
