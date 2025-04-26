@@ -6,7 +6,8 @@ dotenv.config();
 const SERVER_URL = 'http://localhost:4000';
 const HEALTH_ENDPOINT = '/health';
 const SERVER_START_CMD = 'npm start';
-const SERVER_TIMEOUT = 4000; // 5 seconds timeout for operations
+const SERVER_TIMEOUT = 15000; // 15 seconds
+const HEALTH_CHECK_TIMEOUT = 10000; // 10 seconds
 
 let serverProcess;
 

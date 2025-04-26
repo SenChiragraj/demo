@@ -59,12 +59,27 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ======================
-// SERVER STARTUP
-// ======================
 const server = app.listen(4000, () => {
-  console.log(`Server running on port 4000`);
+  console.log(`Server: Port 4000 bound`);
+});
+
+server.on('listening', () => {
+  console.log('SERVER_READY');
   console.log(`Health check: http://localhost:4000/health`);
+});
+
+server.on('error', (err) => {
+  console.error('Server error:', err);
+});
+
+// Handle shutdown signals
+['SIGINT', 'SIGTERM'].forEach((signal) => {
+  process.on(signal, () => {
+    server.close(() => {
+      console.log(`Server stopped by ${signal}`);
+      process.exit(0);
+    });
+  });
 });
 
 export default server; // For testing purposes
