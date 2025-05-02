@@ -125,6 +125,7 @@ async function runTests() {
 }
 
 // Run the tests
+
 runTests();
 
 // Handle any uncaught exceptions
