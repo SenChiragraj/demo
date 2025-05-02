@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { exec } from 'child_process';
 import { config } from 'dotenv';
+import treeKill from 'tree-kill';
 
 // Load environment variables
 config();
@@ -10,6 +11,32 @@ const HEALTH_ENDPOINT = '/health';
 const SERVER_START_CMD = process.env.SERVER_START_CMD || 'node server.js';
 
 let serverProcess;
+
+import net from 'net';
+
+function waitForPortToBeFree(port, host = '127.0.0.1', timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    (function check() {
+      const socket = net.createConnection(port, host);
+      socket.once('error', (err) => {
+        if (err.code === 'ECONNREFUSED') {
+          resolve();
+        } else {
+          if (Date.now() - start > timeout)
+            reject(new Error('Timeout waiting for port to be free'));
+          else setTimeout(check, 200);
+        }
+      });
+      socket.once('connect', () => {
+        socket.end();
+        if (Date.now() - start > timeout)
+          reject(new Error('Timeout waiting for port to be free'));
+        else setTimeout(check, 200);
+      });
+    })();
+  });
+}
 
 /**
  * Start the server
@@ -38,11 +65,17 @@ function startServer() {
  * Stop the server forcefully
  */
 function stopServer() {
-  if (serverProcess) {
-    console.log('Terminating server process...');
-    serverProcess.kill('SIGKILL'); // Forceful termination
-    serverProcess = null;
-  }
+  return new Promise((resolve) => {
+    if (serverProcess) {
+      console.log('Terminating server process...');
+      treeKill(serverProcess.pid, 'SIGKILL', () => {
+        serverProcess = null;
+        resolve();
+      });
+    } else {
+      resolve();
+    }
+  });
 }
 
 /**
@@ -67,6 +100,9 @@ async function testHealthEndpoint() {
  */
 async function runTests() {
   try {
+    // Wait for port to be free before starting
+    await waitForPortToBeFree(4000);
+
     console.log('Starting server...');
     await startServer();
 
@@ -82,8 +118,9 @@ async function runTests() {
     console.error('❌ Test failed:', error.message);
     process.exitCode = 1;
   } finally {
-    stopServer();
-    process.exit(); // Explicitly exit the process
+    await stopServer();
+    await waitForPortToBeFree(4000); // Ensure port is free before exiting
+    process.exit();
   }
 }
 
