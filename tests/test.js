@@ -3,7 +3,7 @@ import { exec } from 'child_process';
 import { config } from 'dotenv';
 import treeKill from 'tree-kill';
 
-// Load environment variables
+// Load environment variables from .env file
 config();
 
 const SERVER_URL = process.env.SERVER_URL || 'http://localhost:4000';
