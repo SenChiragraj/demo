@@ -3,6 +3,7 @@ import { exec } from 'child_process';
 import { config } from 'dotenv';
 import treeKill from 'tree-kill';
 
+//new comment
 // Load environment variables from .env file
 config();
 
