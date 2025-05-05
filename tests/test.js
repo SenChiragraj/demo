@@ -39,9 +39,7 @@ function waitForPortToBeFree(port, host = '127.0.0.1', timeout = 10000) {
   });
 }
 
-/**
- * Start the server
- */
+// Start the server
 function startServer() {
   return new Promise((resolve) => {
     serverProcess = exec(SERVER_START_CMD);
