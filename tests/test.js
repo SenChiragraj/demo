@@ -8,7 +8,7 @@ import treeKill from 'tree-kill';
 config();
 //sample test line
 const SERVER_URL = process.env.SERVER_URL || 'http://localhost:4000';
-const HEALTH_ENDPOINT = '/healthh';
+const HEALTH_ENDPOINT = '/health';
 const SERVER_START_CMD = process.env.SERVER_START_CMD || 'node server.js';
 
 let serverProcess;
