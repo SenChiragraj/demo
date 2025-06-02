@@ -1,5 +1,5 @@
 steps:
-  - name: Build
+  - name: Install
     command: npm i
   - name: Test
     command: npm test
